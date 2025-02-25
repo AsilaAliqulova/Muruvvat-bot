@@ -61,11 +61,12 @@ export class BotUpdate {
 
   @On("callback_query")
   async onCallbackQuery(@Ctx() ctx: Context) {
-    const callbackQuery = ctx.callbackQuery;
+    if (!ctx.callbackQuery || !("data" in ctx.callbackQuery)) {
+      await ctx.answerCbQuery("Xatolik yuz berdi.");
+      return;
+    }
 
-    if (!callbackQuery || !("data" in callbackQuery)) return;
-
-    const callbackData = callbackQuery.data;
+    const callbackData = ctx.callbackQuery.data;
 
     if (callbackData === "confirm_data") {
       await this.botService.confirmRegistration(ctx);
@@ -76,8 +77,8 @@ export class BotUpdate {
     await ctx.answerCbQuery();
   }
 
-  @On("text")
-  async onText(@Ctx() ctx: Context) {
+  @On(["text", "message"])
+  async onUserInput(@Ctx() ctx: Context) {
     if (!ctx.message || !("text" in ctx.message) || !ctx.message.text?.trim()) {
       return;
     }
@@ -87,31 +88,12 @@ export class BotUpdate {
     if (!userId) return;
 
     const userStep = this.botService.getUserStep(userId);
+    const user = await this.botService.findUserById(userId);
 
-    if (userStep >= 0) {
-      const user = await this.botService.findUserById(userId);
-
-      if (user && user.role === "Saxiy") {
+    if (userStep >= 0 && user) {
+      if (user.role === "Saxiy") {
         await this.botService.handleMasterResponse(ctx);
-      } else if (user && user.role === "Sabrli") {
-        await this.botService.handleSabrliResponse(ctx);
-      }
-    }
-  }
-
-  @On("message")
-  async onMessage(@Ctx() ctx: Context) {
-    const userId = ctx.from?.id;
-    if (!userId) return;
-
-    const userStep = this.botService.getUserStep(userId);
-
-    if (userStep >= 0) {
-      const user = await this.botService.findUserById(userId);
-
-      if (user && user.role === "Saxiy") {
-        await this.botService.handleMasterResponse(ctx);
-      } else if (user && user.role === "Sabrli") {
+      } else if (user.role === "Sabrli") {
         await this.botService.handleSabrliResponse(ctx);
       }
     }

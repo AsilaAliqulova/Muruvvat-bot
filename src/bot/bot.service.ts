@@ -8,7 +8,7 @@ import {
 } from "telegraf";
 import { Bot } from "./models/bot.model";
 import { BOT_NAME } from "../app.constants";
-import { InjectBot } from "nestjs-telegraf";
+import { Ctx, InjectBot, On } from "nestjs-telegraf";
 
 @Injectable()
 export class BotService {
@@ -194,7 +194,42 @@ export class BotService {
         break;
       case 3:
         userData.phone = userInput;
-        await ctx.reply("Viloyatingizni kiriting:");
+        await ctx.reply("Viloyatingizni tanlang:", {
+          parse_mode: "HTML",
+          ...Markup.inlineKeyboard([
+            [
+              Markup.button.callback("Toshkent shahri", "toshkent_shahri"),
+              Markup.button.callback("Toshkent viloyati", "toshkent_viloyati"),
+            ],
+            [
+              Markup.button.callback("Farg'ona viloyati", "fargona"),
+              Markup.button.callback("Andijon viloyati", "andijon"),
+            ],
+            [
+              Markup.button.callback("Namangan viloyati", "namangan"),
+              Markup.button.callback("Jizzax viloyati", "jizzax"),
+            ],
+            [
+              Markup.button.callback("Sirdaryo viloyati", "sirdaryo"),
+              Markup.button.callback("Samarqand viloyati", "samarqand"),
+            ],
+            [
+              Markup.button.callback("Surxandaryo viloyati", "surxandaryo"),
+              Markup.button.callback("Qashqadaryo viloyati", "qashqadaryo"),
+            ],
+            [
+              Markup.button.callback("Buxoro viloyati", "buxoro"),
+              Markup.button.callback("Navoiy viloyati", "navoiy"),
+            ],
+            [
+              Markup.button.callback("Xorazm viloyati", "xorazm"),
+              Markup.button.callback(
+                "Qoraqalpog'iston Respublikasi",
+                "qoraqalpogiston"
+              ),
+            ],
+          ]),
+        });
         step++;
         break;
       case 4:
@@ -240,6 +275,137 @@ export class BotService {
 
   public getUserStep(userId: number): number {
     return this.userSteps.get(userId) ?? 0;
+  }
+  @On("callback_query")
+  async onCallbackQuery(@Ctx() ctx: Context) {
+    try {
+      const user_id = ctx.from?.id;
+      if (!user_id) return;
+
+      let userState = this.userSteps.get(user_id);
+      if (!userState) {
+        userState = { userData: {}, step: 0 };
+        this.userSteps.set(user_id, userState);
+      }
+
+      if (!ctx.callbackQuery || !("data" in ctx.callbackQuery)) {
+        await ctx.answerCbQuery("Xatolik yuz berdi.");
+        return;
+      }
+
+      const callbackData = ctx.callbackQuery.data as string;
+
+      const districts = {
+        toshkent_shahri: [
+          "Yunusobod",
+          "Chilonzor",
+          "Olmazor",
+          "Yakkasaroy",
+          "Sergili",
+          "Yashnabod",
+          "Uchtepa",
+          "Bektemir",
+        ],
+        toshkent_viloyati: [
+          "Chirchiq",
+          "Bekobod",
+          "Bekobod tumani",
+          "Angren",
+          "Yangiyo'l",
+          "Olmaliq",
+          "Zangiota",
+        ],
+        fargona: [
+          "Farg'ona",
+          "Qo'qon",
+          "Marg'ilon",
+          "Oltiariq",
+          "Chimyon",
+          "Buvayda",
+          "Dang'ara",
+          "Farg'ona tumani",
+        ],
+        andijon: [
+          "Andijon",
+          "Asaka",
+          "Xonobod",
+          "Baliqchi",
+          "Bo'z",
+          "Buloqboshi",
+          "Izboskan",
+          "Marhamat",
+          "Oltinko'l",
+        ],
+        namangan: [
+          "Namangan",
+          "Chortoq",
+          "Pop",
+          "Chust",
+          "Kosonsoy",
+          "Mingbuloq",
+          "Norin",
+          "To'raqo'rg'on",
+        ],
+        jizzax: ["Jizzax", "G'allaorol", "Zomin", "Paxtakor", "Dashtobod"],
+        sirdaryo: [
+          "Guliston",
+          "Shirin",
+          "Yangiyer",
+          "Xovos",
+          "Sardoba",
+          "Baxt",
+        ],
+        samarqand: ["Samarqand", "Kattaqo'rg'on", "Urgut", "Qo'shrabot"],
+        surxandaryo: ["Termiz", "Sherobod", "Denov"],
+        qashqadaryo: ["Qarshi", "Kitob", "Shahrisabz"],
+        buxoro: ["Buxoro", "G'ijduvon", "Kogon"],
+        navoiy: ["Navoiy", "Zarafshon", "Uchquduq"],
+        xorazm: ["Urganch", "Xiva", "Pitnak"],
+        qoraqalpogiston: ["Nukus", "Mo'ynoq", "Taxiatosh"],
+      };
+
+      if (callbackData.startsWith("viloyat_")) {
+        const viloyatKey = callbackData.replace("viloyat_", "");
+
+        if (districts[viloyatKey]) {
+          userState.userData.region = viloyatKey; 
+          userState.step = 4; 
+
+          await ctx.reply("Tumaningizni tanlang:", {
+            parse_mode: "HTML",
+            ...Markup.inlineKeyboard(
+              districts[viloyatKey].map((district) => [
+                Markup.button.callback(
+                  district,
+                  `district_${district.toLowerCase()}`
+                ),
+              ])
+            ),
+          });
+
+          await ctx.answerCbQuery();
+          return;
+        }
+      }
+
+      if (callbackData.startsWith("district_")) {
+        const tumanName = callbackData
+          .replace("district_", "")
+          .replace("_", " ");
+        userState.userData.district = tumanName;
+        userState.step = 5
+
+        await ctx.reply(`✅ Siz **${tumanName}** tumanini tanladingiz.`);
+        await ctx.reply("Qanday yordam kerakligini yozib qoldiring:");
+
+        await ctx.answerCbQuery();
+        return;
+      }
+
+      await ctx.answerCbQuery();
+    } catch (error) {
+      console.error("onCallbackQuery xatosi:", error);
+    }
   }
 
   async askMasterDetails(ctx: Context) {
@@ -321,6 +487,10 @@ export class BotService {
     this.userData.set(userId, userData);
   }
 
+  async findUserById(userId: number) {
+    return await this.botModel.findByPk(userId);
+  }
+
   async confirmRegistration(ctx: Context) {
     const userId = ctx.from!.id;
 
@@ -333,9 +503,5 @@ export class BotService {
         ["Admin bilan bog'lanish", "Sozlamalar"],
       ]).resize(),
     });
-  }
-
-  async findUserById(userId: number) {
-    return await this.botModel.findByPk(userId);
   }
 }
